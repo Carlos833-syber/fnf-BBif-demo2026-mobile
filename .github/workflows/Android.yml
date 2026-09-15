@@ -1,10 +1,10 @@
-name: Build Android APK
+name: Build BBif Demo Android
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-android:
@@ -20,33 +20,50 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Haxe
+      - name: Setup Haxe 4.3.7
         uses: krdlab/setup-haxe@v1
         with:
           haxe-version: '4.3.7'
 
-      - name: Setup Android SDK
+      - name: Setup Android
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages
+      - name: Accept Android licenses
         run: |
-          sdkmanager "platform-tools"
-          sdkmanager "platforms;android-35"
-          sdkmanager "build-tools;35.0.0"
-          sdkmanager "ndk;21.4.7075529"
+          yes | sdkmanager --licenses > /dev/null || true
 
-      - name: Configure Android environment
+      - name: Install Android SDK
         run: |
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/21.4.7075529" >> $GITHUB_ENV
-          echo "PATH=$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH" >> $GITHUB_ENV
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;21.4.7075529"
 
-      - name: Install Haxelib dependencies
+      - name: Configure Android
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/21.4.7075529" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/21.4.7075529" >> "$GITHUB_ENV"
+
+      - name: Show Android versions
+        run: |
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "ANDROID_NDK_ROOT=$ANDROID_NDK_ROOT"
+          adb version || true
+          "$ANDROID_NDK_ROOT/ndk-build" --version || true
+
+      - name: Setup Haxelib
         run: |
           haxelib setup ~/haxelib
 
+      - name: Install hxpkg
+        run: |
           haxelib install hxpkg --always
+
+      - name: Install project dependencies
+        run: |
           haxelib run hxpkg install
 
       - name: Install Lime
@@ -63,20 +80,19 @@ jobs:
         run: |
           haxelib run lime setup android
 
-      - name: Build Android
+      - name: Build APK
         run: |
           haxelib run lime build android -release
 
       - name: Find APK
         run: |
-          echo "APK files:"
-          find export -type f -name "*.apk" -print
+          echo "===== APK ====="
+          find export -type f -name "*.apk" -print || true
+          echo "=============="
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: BBif-Demo-Android
-          path: |
-            export/**/*.apk
-            export/**/**/*.apk
+          path: export/**/*.apk
           if-no-files-found: error
